@@ -1,0 +1,181 @@
+<?xml version="1.0" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<title>Web-Scraper</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<link rev="made" href="mailto:root@localhost" />
+</head>
+
+<body style="background-color: white">
+
+
+<!-- INDEX BEGIN -->
+<div name="index">
+<p><a name="__index__"></a></p>
+
+<ul>
+
+	<li><a href="#______">名称</a></li>
+	<li><a href="#______">概要</a></li>
+	<li><a href="#______">描述</a></li>
+	<li><a href="#______">方法</a></li>
+	<ul>
+
+		<li><a href="#scraper">scraper</a></li>
+		<li><a href="#scrape">scrape</a></li>
+		<li><a href="#process">process</a></li>
+	</ul>
+
+	<li><a href="#______">样例</a></li>
+	<li><a href="#nested_scrapers">NESTED SCRAPERS</a></li>
+	<li><a href="#filters">FILTERS</a></li>
+	<li><a href="#author">AUTHOR</a></li>
+	<li><a href="#license">LICENSE</a></li>
+</ul>
+
+<hr name="index" />
+</div>
+<!-- INDEX END -->
+
+<p>
+</p>
+<h1><a name="______">名称</a></h1>
+<p>Web::Scraper - 一个支持HTML,CSS路径，以及XPath表达式的网页分析工具.</p>
+<p>
+</p>
+<hr />
+<h1><a name="______">概要</a></h1>
+<pre>
+  use URI;
+  use Web::Scraper;</pre>
+<pre>
+  # First, create your scraper block
+  my $tweets = scraper {
+      # Parse all LIs with the class &quot;status&quot;, store them into a resulting
+      # array 'tweets'.  We embed another scraper for each tweet.
+      process &quot;li.status&quot;, &quot;tweets[]&quot; =&gt; scraper {
+          # And, in that array, pull in the elementy with the class
+          # &quot;entry-content&quot;, &quot;entry-date&quot; and the link
+          process &quot;.entry-content&quot;, body =&gt; 'TEXT';
+          process &quot;.entry-date&quot;, when =&gt; 'TEXT';
+          process 'a[rel=&quot;bookmark&quot;]', link =&gt; '@href';
+      };
+  };</pre>
+<pre>
+  my $res = $tweets-&gt;scrape( URI-&gt;new(&quot;<a href="http://twitter.com/miyagawa&quot">http://twitter.com/miyagawa&quot</a>;) );</pre>
+<pre>
+  # The result has the populated tweets array
+  for my $tweet (@{$res-&gt;{tweets}}) {
+      print &quot;$tweet-&gt;{body} $tweet-&gt;{when} (link: $tweet-&gt;{link})\n&quot;;
+  }</pre>
+<pre>
+ 分析之后返回的数据结构:</pre>
+<pre>
+  {
+    tweets =&gt; [
+      { body =&gt; $body, when =&gt; $date, link =&gt; $uri },
+      { body =&gt; $body, when =&gt; $date, link =&gt; $uri },
+    ]
+  }</pre>
+<p>
+</p>
+<hr />
+<h1><a name="______">描述</a></h1>
+<p>Web::Scraper是一个网页分析工具，最初是受到Ruby的启发.他提供一个DSL-ish的接口，
+通过这个接口分析HTML文档并且返回预先设置好的数据结构.</p>
+<p><em>scraper</em> 和 <em>process</em> 提供一个可以配置html解析规则的语句块，解析规则可以有多种形式，包括XPath和CSS Selectors.
+XPath自己写起来比较麻烦，我推荐用firefox安装firebug之后在窗口里直接复制粘贴.</p>
+<p>
+</p>
+<hr />
+<h1><a name="______">方法</a></h1>
+<p>
+</p>
+<h2><a name="scraper">scraper</a></h2>
+<pre>
+  $scraper = scraper { ... };</pre>
+<p>创建一个Web::Scraper对象,在scraper语句块里配置好你的解析规则,创建完成之后，只要你调用<em>scraper</em>方法，这些规则就会生效.</p>
+<p>
+</p>
+<h2><a name="scrape">scrape</a></h2>
+<pre>
+  $res = $scraper-&gt;scrape(URI-&gt;new($uri));
+  $res = $scraper-&gt;scrape($html_content);
+  $res = $scraper-&gt;scrape(\$html_content);
+  $res = $scraper-&gt;scrape($http_response);
+  $res = $scraper-&gt;scrape($html_element);</pre>
+<p>scrape方法在解析网页支持多种来源，你可以直接传递html内容字符串，也可以直接传递链接地址，模块会自动为你下载网页，
+甚至你还可以传递response对象进去.</p>
+<p>至于到底哪一个方法好，只能任君选择了?</p>
+<pre>
+  $res = $scraper-&gt;scrape($html_content, &quot;<a href="http://example.com/foo&quot">http://example.com/foo&quot</a>;);</pre>
+<p>上面的代码里，scrape只会解析在html字符里面与该链接相关的内容.</p>
+<p>
+</p>
+<h2><a name="process">process</a></h2>
+<pre>
+  scraper {
+      process &quot;tag.class&quot;, key =&gt; 'TEXT';
+      process '//tag[contains(@foo, &quot;bar&quot;)]', key2 =&gt; '@attr';
+      process '//comment()', 'comments[]' =&gt; 'TEXT';
+  };</pre>
+<p><em>process</em>方法提供配置HTML元素的XPath表达式或者CSS Selectors表达式，并且将分析出的数据存储在配置好的数据结构里面.</p>
+<p>如果第一个参数是以&quot;//&quot;,或者&quot;id&quot;开始(scrape会认为这是一个XPath表达式，否则认为是一个CSS表达式)</p>
+<pre>
+  # &lt;span class=&quot;date&quot;&gt;2008/12/21&lt;/span&gt;
+  # date =&gt; &quot;2008/12/21&quot;
+  process &quot;.date&quot;, date =&gt; 'TEXT';</pre>
+<pre>
+  # &lt;div class=&quot;body&quot;&gt;&lt;a href=&quot;<a href="http://example.com/">http://example.com/</a>&quot;&gt;foo&lt;/a&gt;&lt;/div&gt;
+  # link =&gt; URI-&gt;new(&quot;<a href="http://example.com/&quot">http://example.com/&quot</a>;)
+  process &quot;.body &gt; a&quot;, link =&gt; '@href';</pre>
+<pre>
+  # &lt;div class=&quot;body&quot;&gt;&lt;!-- HTML Comment here --&gt;&lt;a href=&quot;<a href="http://example.com/">http://example.com/</a>&quot;&gt;foo&lt;/a&gt;&lt;/div&gt;
+  # comment =&gt; &quot; HTML Comment here &quot;
+  #
+  # NOTES: A comment nodes are accessed when installed
+  # the HTML::TreeBuilder::XPath (version &gt;= 0.14) and/or
+  # the HTML::TreeBuilder::LibXML (version &gt;= 0.13)
+  process &quot;//div[contains(@class, 'body')]/comment()&quot;, comment =&gt; 'TEXT';</pre>
+<pre>
+  # &lt;div class=&quot;body&quot;&gt;&lt;a href=&quot;<a href="http://example.com/">http://example.com/</a>&quot;&gt;foo&lt;/a&gt;&lt;/div&gt;
+  # link =&gt; URI-&gt;new(&quot;<a href="http://example.com/&quot">http://example.com/&quot</a>;), text =&gt; &quot;foo&quot;
+  process &quot;.body &gt; a&quot;, link =&gt; '@href', text =&gt; 'TEXT';</pre>
+<pre>
+  # &lt;ul&gt;&lt;li&gt;foo&lt;/li&gt;&lt;li&gt;bar&lt;/li&gt;&lt;/ul&gt;
+  # list =&gt; [ &quot;foo&quot;, &quot;bar&quot; ]
+  process &quot;li&quot;, &quot;list[]&quot; =&gt; &quot;TEXT&quot;;</pre>
+<pre>
+  # &lt;ul&gt;&lt;li id=&quot;1&quot;&gt;foo&lt;/li&gt;&lt;li id=&quot;2&quot;&gt;bar&lt;/li&gt;&lt;/ul&gt;
+  # list =&gt; [ { id =&gt; &quot;1&quot;, text =&gt; &quot;foo&quot; }, { id =&gt; &quot;2&quot;, text =&gt; &quot;bar&quot; } ];
+  process &quot;li&quot;, &quot;list[]&quot; =&gt; { id =&gt; '@id', text =&gt; &quot;TEXT&quot; };</pre>
+<p>一般的来说XPath都是比较准确的，但是有的网页不规范，这个时候你只能自己写css path了.</p>
+<p>
+</p>
+<hr />
+<h1><a name="______">样例</a></h1>
+<p>
+</p>
+<hr />
+<h1><a name="nested_scrapers">NESTED SCRAPERS</a></h1>
+<p>TBD</p>
+<p>
+</p>
+<hr />
+<h1><a name="filters">FILTERS</a></h1>
+<p>TBD</p>
+<p>
+</p>
+<hr />
+<h1><a name="author">AUTHOR</a></h1>
+<p><a href="mailto:斯文牛氓<492003149@qq.com>">斯文牛氓<492003149@qq.com></a>
+perlchina官方交流群: 211685345欢迎您的加入.</p>
+<p>
+</p>
+<hr />
+<h1><a name="license">LICENSE</a></h1>
+
+</body>
+
+</html>

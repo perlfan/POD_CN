@@ -1,0 +1,144 @@
+=head1 名称
+
+Web::Scraper - 一个支持HTML,CSS路径，以及XPath表达式的网页分析工具.
+
+=head1 概要
+
+  use URI;
+  use Web::Scraper;
+
+  # First, create your scraper block
+  my $tweets = scraper {
+      # Parse all LIs with the class "status", store them into a resulting
+      # array 'tweets'.  We embed another scraper for each tweet.
+      process "li.status", "tweets[]" => scraper {
+          # And, in that array, pull in the elementy with the class
+          # "entry-content", "entry-date" and the link
+          process ".entry-content", body => 'TEXT';
+          process ".entry-date", when => 'TEXT';
+          process 'a[rel="bookmark"]', link => '@href';
+      };
+  };
+
+  my $res = $tweets->scrape( URI->new("http://twitter.com/miyagawa") );
+
+  # The result has the populated tweets array
+  for my $tweet (@{$res->{tweets}}) {
+      print "$tweet->{body} $tweet->{when} (link: $tweet->{link})\n";
+  }
+
+ 分析之后返回的数据结构:
+
+  {
+    tweets => [
+      { body => $body, when => $date, link => $uri },
+      { body => $body, when => $date, link => $uri },
+    ]
+  }
+
+=head1 描述 
+
+Web::Scraper是一个网页分析工具，最初是受到Ruby的启发.他提供一个DSL-ish的接口，
+通过这个接口分析HTML文档并且返回预先设置好的数据结构.
+
+
+
+I<scraper> 和 I<process> 提供一个可以配置html解析规则的语句块，解析规则可以有多种形式，包括XPath和CSS Selectors.
+XPath自己写起来比较麻烦，我推荐用firefox安装firebug之后在窗口里直接复制粘贴.
+
+
+=head1 方法
+
+=head2 scraper
+
+  $scraper = scraper { ... };
+
+创建一个Web::Scraper对象,在scraper语句块里配置好你的解析规则,创建完成之后，只要你调用I<scraper>方法，这些规则就会生效.
+
+=head2 scrape
+
+  $res = $scraper->scrape(URI->new($uri));
+  $res = $scraper->scrape($html_content);
+  $res = $scraper->scrape(\$html_content);
+  $res = $scraper->scrape($http_response);
+  $res = $scraper->scrape($html_element);
+
+scrape方法在解析网页支持多种来源，你可以直接传递html内容字符串，也可以直接传递链接地址，模块会自动为你下载网页，
+甚至你还可以传递response对象进去.
+
+
+至于到底哪一个方法好，只能任君选择了?
+
+
+  $res = $scraper->scrape($html_content, "http://example.com/foo");
+
+上面的代码里，scrape只会解析在html字符里面与该链接相关的内容.
+
+=head2 process
+
+  scraper {
+      process "tag.class", key => 'TEXT';
+      process '//tag[contains(@foo, "bar")]', key2 => '@attr';
+      process '//comment()', 'comments[]' => 'TEXT';
+  };
+
+I<process>方法提供配置HTML元素的XPath表达式或者CSS Selectors表达式，并且将分析出的数据存储在配置好的数据结构里面.
+
+如果第一个参数是以"//",或者"id"开始(scrape会认为这是一个XPath表达式，否则认为是一个CSS表达式)
+
+
+  # <span class="date">2008/12/21</span>
+  # date => "2008/12/21"
+  process ".date", date => 'TEXT';
+
+  # <div class="body"><a href="http://example.com/">foo</a></div>
+  # link => URI->new("http://example.com/")
+  process ".body > a", link => '@href';
+
+  # <div class="body"><!-- HTML Comment here --><a href="http://example.com/">foo</a></div>
+  # comment => " HTML Comment here "
+  #
+  # NOTES: A comment nodes are accessed when installed
+  # the HTML::TreeBuilder::XPath (version >= 0.14) and/or
+  # the HTML::TreeBuilder::LibXML (version >= 0.13)
+  process "//div[contains(@class, 'body')]/comment()", comment => 'TEXT';
+
+  # <div class="body"><a href="http://example.com/">foo</a></div>
+  # link => URI->new("http://example.com/"), text => "foo"
+  process ".body > a", link => '@href', text => 'TEXT';
+
+  # <ul><li>foo</li><li>bar</li></ul>
+  # list => [ "foo", "bar" ]
+  process "li", "list[]" => "TEXT";
+
+  # <ul><li id="1">foo</li><li id="2">bar</li></ul>
+  # list => [ { id => "1", text => "foo" }, { id => "2", text => "bar" } ];
+  process "li", "list[]" => { id => '@id', text => "TEXT" };
+
+
+一般的来说XPath都是比较准确的，但是有的网页不规范，这个时候你只能自己写css path了.
+
+=head1 样例
+
+
+
+=head1 NESTED SCRAPERS
+
+TBD
+
+=head1 FILTERS
+
+TBD
+
+=head1 AUTHOR
+
+斯文牛氓<492003149@qq.com>
+perlchina官方交流群: 211685345欢迎您的加入.
+
+=head1 LICENSE
+
+
+
+
+
+=cut
